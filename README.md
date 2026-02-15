@@ -51,7 +51,7 @@ NucleOS is a Debian disk image made from scratch for Carrera de Informática - U
 ## 🚀 Quick Start
 
 ```bash
-git clone <repo-url> nucleos && cd nucleos
+git clone https://github.com/LuisMitaHL/NucleOS nucleos && cd nucleos
 
 cp /path/to/my-wallpaper.png assets/wallpaper.png
 
