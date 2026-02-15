@@ -1,0 +1,13 @@
+[Unit]
+Description=NucleOS First Boot — Resize filesystem & create factory snapshot
+ConditionPathExists=!/var/lib/nucleos/firstboot-done
+After=local-fs.target
+Before=display-manager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/nucleos-firstboot.sh
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target

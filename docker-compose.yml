@@ -1,0 +1,32 @@
+services:
+  # ── APT cache server ─────────────────────────────────────────
+  apt-cache:
+    image: sameersbn/apt-cacher-ng:3.7.4-20220421
+    ports:
+      - "3142:3142"
+    volumes:
+      - apt-cache-data:/var/cache/apt-cacher-ng
+    restart: unless-stopped
+
+  # ── NucleOS image builder ────────────────────────────────────
+  builder:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    privileged: true # Required for losetup, mount, chroot
+    depends_on:
+      apt-cache:
+        condition: service_started
+    environment:
+      APT_PROXY: "http://apt-cache:3142"
+    volumes:
+      - ./output:/build/output # Built images land here
+      - ./assets:/build/assets # Custom wallpaper, etc.
+      - ./config:/build/config # Overridable config
+      - ./scripts:/build/scripts # Live scripts for dev
+    #tmpfs:
+    #  - /tmp:exec,size=8G
+
+volumes:
+  apt-cache-data:
+    driver: local

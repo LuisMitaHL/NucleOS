@@ -1,0 +1,18 @@
+# Build output
+output/
+
+# Docker volumes / caches
+.docker/
+apt-cache-data/
+
+# Temporary files
+*.tmp
+*.swp
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# UEFI vars image
+MY_VARS.fd

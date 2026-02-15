@@ -1,0 +1,75 @@
+#!/usr/bin/env bash
+# ─────────────────────────────────────────────────────────────
+# nucleos-restore — Revert the system to its initial state
+#
+# Replaces the active @ subvolume with a snapshot of the
+# original NucleOS install (snapshot #1 created at build time).
+# ─────────────────────────────────────────────────────────────
+set -euo pipefail
+
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+CYAN='\033[0;36m'
+BOLD='\033[1m'
+NC='\033[0m'
+
+die()  { echo -e "${RED}${BOLD}ERROR:${NC} $*" >&2; exit 1; }
+info() { echo -e "${GREEN}[nucleos-restore]${NC} $*"; }
+
+# ── Sanity checks ───────────────────────────────────────────
+[[ $EUID -eq 0 ]] || die "This script must be run as root."
+command -v btrfs &>/dev/null || die "btrfs-progs is not installed."
+
+SNAPSHOT_PATH="/.snapshots/1/snapshot"
+[[ -d "${SNAPSHOT_PATH}" ]] || die "Initial snapshot not found at ${SNAPSHOT_PATH}."
+
+# ── Confirm ─────────────────────────────────────────────────
+echo ""
+echo -e "${CYAN}${BOLD}╔══════════════════════════════════════════════════╗${NC}"
+echo -e "${CYAN}${BOLD}║           NucleOS System Restore                 ║${NC}"
+echo -e "${CYAN}${BOLD}╚══════════════════════════════════════════════════╝${NC}"
+echo ""
+echo "This will revert the root filesystem to the initial NucleOS"
+echo "state created at build time (snapshot #1)."
+echo ""
+echo -e "${RED}${BOLD}WARNING:${NC} All changes made since installation will be lost."
+echo "         /home will NOT be affected."
+echo ""
+read -rp "Type 'RESTORE' to confirm: " CONFIRM
+[[ "${CONFIRM}" == "RESTORE" ]] || { echo "Aborted."; exit 0; }
+
+# ── Find the Btrfs device ──────────────────────────────────
+ROOT_DEV=$(findmnt -n -o SOURCE / | sed 's/\[.*\]//')
+[[ -n "${ROOT_DEV}" ]] || die "Cannot determine root device."
+
+# ── Mount the top-level (subvolid=5) ───────────────────────
+WORK=$(mktemp -d)
+info "Mounting top-level Btrfs volume..."
+mount -o subvolid=5 "${ROOT_DEV}" "${WORK}"
+
+trap 'umount "${WORK}" 2>/dev/null; rmdir "${WORK}" 2>/dev/null' EXIT
+
+# ── Verify subvolumes exist ─────────────────────────────────
+[[ -d "${WORK}/@" ]]             || die "Subvolume @ not found on top-level."
+[[ -d "${WORK}/@snapshots/1/snapshot" ]] || die "Snapshot #1 not found on top-level."
+
+# ── Replace @ with snapshot ─────────────────────────────────
+TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+BROKEN_NAME="@.broken-${TIMESTAMP}"
+
+info "Renaming current @ → ${BROKEN_NAME}..."
+mv "${WORK}/@" "${WORK}/${BROKEN_NAME}"
+
+info "Creating new @ from initial snapshot..."
+btrfs subvolume snapshot "${WORK}/@snapshots/1/snapshot" "${WORK}/@"
+
+info "Restore complete!"
+echo ""
+echo -e "${GREEN}${BOLD}The system will use the initial snapshot on next boot.${NC}"
+echo -e "The old root has been preserved as ${BOLD}${BROKEN_NAME}${NC}."
+echo -e "You can delete it later with: ${CYAN}sudo btrfs subvolume delete /${BROKEN_NAME}${NC}"
+echo ""
+read -rp "Reboot now? [y/N] " REBOOT
+if [[ "${REBOOT}" =~ ^[Yy]$ ]]; then
+    reboot
+fi
